@@ -13,93 +13,121 @@ Built with **K3s**, **Docker**, **Terraform**, and **Ansible**.
 ```
 edgeops-runtime/
 ├── .github/workflows/         # GitHub Actions for CI
-│   └── docker-ci.yml          # Lint and build containers
-├── .gitignore                 # Standard Git ignore rules
-├── LICENSE                    # MIT License
-├── edge-bundles/              # Pre-packaged tarballs for edge deployment
-├── configs/                   # TLS certs, .env files, YAML manifests
+│   └── docker-ci.yml
+├── .gitignore
+├── LICENSE
+├── edge-bundles/
+├── configs/
 │   ├── install-k3s.sh
 │   ├── bootstrap.sh
 │   └── secrets.env
-├── docker/                    # Dockerfiles for app components
+├── docker/
 │   ├── Dockerfile.inference
 │   ├── Dockerfile.logger
 │   └── Dockerfile.dashboard
-├── scripts/                   # Sync and utility scripts
+├── scripts/
 │   ├── sync-logs.sh
 │   └── gitops-pull.sh
-├── terraform/                 # AWS EC2 and network provisioning
+├── terraform/
 │   ├── main.tf
 │   ├── variables.tf
 │   └── dev.tfvars
-├── ansible/                   # Configuration management for edge nodes
+├── ansible/
 │   ├── playbook.yml
 │   └── inventory.ini
-├── k3s-manifests/             # K3s deployment manifests (apps, services)
+├── k3s-manifests/
 │   ├── inference-deployment.yaml
 │   ├── logger-deployment.yaml
 │   └── dashboard-service.yaml
-└── README.md                  # Setup and usage guide
+└── README.md
 ```
 
 ---
 
-## 🛠️ Step-by-Step Setup Guide
+## 🔧 Sample File Contents
 
-### 1. Clone the Repository
-```bash
-git clone https://github.com/YOUR_USERNAME/edgeops-runtime.git
-cd edgeops-runtime
+### `.gitignore`
+```
+*.tar.gz
+*.log
+*.pem
+.env
+__pycache__/
+.edge-cache/
+.terraform/
 ```
 
-### 2. Build Docker Images
-```bash
-cd docker/
-docker build -t edge-inference:latest -f Dockerfile.inference .
-docker build -t edge-logger:latest -f Dockerfile.logger .
-docker build -t edge-dashboard:latest -f Dockerfile.dashboard .
+### `LICENSE`
+```
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy...
 ```
 
-### 3. Create an Edge Bundle for Offline Deployment
-```bash
-mkdir -p ../edge-bundles/
-docker save edge-inference edge-logger edge-dashboard -o ../edge-bundles/containers.tar
-cp -r ../configs ../edge-bundles/
-cd ../edge-bundles/
-tar -czvf edge-deploy-bundle.tar.gz containers.tar configs/
+### `.github/workflows/docker-ci.yml`
+```yaml
+name: Docker Build CI
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build Docker Images
+        run: |
+          docker build -t edge-inference docker/ -f docker/Dockerfile.inference
 ```
 
-### 4. Provision Cloud Resources with Terraform (AWS Example)
-```bash
-cd terraform/
-terraform init
-terraform apply -var-file="dev.tfvars"
+### `docker/Dockerfile.inference`
+```Dockerfile
+FROM python:3.9-slim
+COPY . /app
+WORKDIR /app
+RUN pip install -r requirements.txt
+CMD ["python", "inference.py"]
 ```
 
-### 5. Deploy to Edge Device (Disconnected)
-Transfer `edge-deploy-bundle.tar.gz` to the device (via USB or SSD), then run:
-```bash
-tar -xzvf edge-deploy-bundle.tar.gz
-cd configs/
-./install-k3s.sh  # Or use ansible playbook
-./bootstrap.sh    # Load images, apply manifests, start services
+### `terraform/main.tf`
+```hcl
+provider "aws" {
+  region = var.aws_region
+}
+
+resource "aws_instance" "edge_runtime" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+  tags = {
+    Name = "EdgeRuntime"
+  }
+}
 ```
 
-### 6. Observe Locally
-- Visit `http://localhost:3000` for the Grafana dashboard
-- Log output: `/var/log/edge-apps/`
-
-### 7. Sync to Cloud (When Online)
-```bash
-./scripts/sync-logs.sh  # Push to S3 or CloudWatch
-./scripts/gitops-pull.sh  # Optional GitOps update if network is restored
+### `ansible/playbook.yml`
+```yaml
+- name: Setup Edge Device
+  hosts: edge
+  become: yes
+  tasks:
+    - name: Install K3s
+      shell: curl -sfL https://get.k3s.io | sh -
+    - name: Load images
+      shell: docker load -i /opt/containers.tar
 ```
 
----
+### `configs/install-k3s.sh`
+```bash
+#!/bin/bash
+curl -sfL https://get.k3s.io | sh -
+```
 
-## 🔐 Security Considerations
-- TLS certs and tokens are pre-staged in `configs/`
-- Secrets managed via Vault or AWS SSM snapshots
+### `configs/bootstrap.sh`
+```bash
+#!/bin/bash
+docker load -i ../edge-bundles/containers.tar
+kubectl apply -f ../k3s-manifests/
+```
 
 ---
 
@@ -112,8 +140,7 @@ cd configs/
 ---
 
 ## 🔄 To-Do
-- Add automated Vault unseal
-- Add GPU inference demo for Jetson devices
+- Add Vault auto-unseal logic
 - Add Azure Stack Edge deployment example
 
 ---
@@ -123,4 +150,4 @@ MIT License
 
 ---
 
-Feel free to fork and adapt this for other disconnected or hybrid environments.
+Feel free to fork and adapt this for disconnected or hybrid edge environments.
