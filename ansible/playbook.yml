@@ -1,0 +1,8 @@
+- name: Setup Edge Device
+  hosts: edge
+  become: yes
+  tasks:
+    - name: Install K3s
+      shell: curl -sfL https://get.k3s.io | sh -
+    - name: Load images
+      shell: docker load -i /opt/containers.tar

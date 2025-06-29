@@ -1,0 +1,7 @@
+*.tar.gz
+*.log
+*.pem
+.env
+__pycache__/
+.edge-cache/
+.terraform/
