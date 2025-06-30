@@ -1,8 +1,38 @@
-- name: Setup Edge Device
+- name: Configure Edge Device with K3s and Edge Inference App
   hosts: edge
   become: yes
+  vars:
+    app_name: edge-inference
+    image_tar: /opt/containers.tar
+    helm_chart_path: /opt/helm-charts/edge-inference
+    namespace: default
+
   tasks:
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
     - name: Install K3s
       shell: curl -sfL https://get.k3s.io | sh -
-    - name: Load images
-      shell: docker load -i /opt/containers.tar
+
+    - name: Wait for K3s to start
+      pause:
+        seconds: 15
+
+    - name: Load Docker image into K3s
+      shell: "k3s ctr images import {{ image_tar }}"
+      when: image_tar is defined
+
+    - name: Install Helm (if missing)
+      shell: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Deploy Helm chart
+      shell: >
+        helm upgrade --install {{ app_name }} {{ helm_chart_path }}
+        --namespace {{ namespace }} --create-namespace
+        --set image.repository={{ app_name }},image.tag=latest
