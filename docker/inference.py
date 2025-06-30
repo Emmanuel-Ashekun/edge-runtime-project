@@ -4,6 +4,9 @@ from flask import Flask, request
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+from prometheus_flask_exporter import PrometheusMetrics
+
+
 
 app = Flask(__name__)
 
@@ -31,3 +34,11 @@ def hello():
 if __name__ == '__main__':
     app.logger.info("Starting Edge Inference App...")
     app.run(host='0.0.0.0', port=8080)
+# Add to inference.py
+from prometheus_flask_exporter import PrometheusMetrics
+
+
+### Monitoring
+
+
+metrics = PrometheusMetrics(app)
