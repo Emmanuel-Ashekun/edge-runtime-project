@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-app
+  labels:
+    app: inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inference
+  template:
+    metadata:
+      labels:
+        app: inference
+    spec:
+      containers:
+      - name: inference
+        image: edge-inference:latest
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/edge-apps
+      volumes:
+      - name: logs
+        emptyDir: {}
