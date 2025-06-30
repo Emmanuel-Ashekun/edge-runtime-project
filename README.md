@@ -77,7 +77,7 @@ helm install edge-inference ./helm-charts/edge-inference
 
 ### Step 5: GitOps with Argo CD
 ```bash
-kubectl apply -f argocd/edge-inference-app.yaml
+kubectl apply -f helm-charts/argocd/edge-inference.yml
 ```
 ArgoCD will watch your repo and sync Helm chart changes to the cluster.
 
