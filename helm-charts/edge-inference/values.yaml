@@ -1,0 +1,22 @@
+name: "edge-inference"
+replicaCount: 1
+
+image:
+  repository: "ashekun/docker-inference"
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+containerPort: 8080
+
+service:
+  type: ClusterIP
+  port: 8080
+  nodePort: null
+
+ingress:
+  enabled: false
+  tls: false
+  hosts:
+    - host: edge.test.local
+      paths:
+        - path: /

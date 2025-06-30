@@ -1,153 +1,136 @@
-# EdgeOps: Portable Container Runtime for Edge and Cloud
+# EdgeOps: Portable Runtime Platform for Edge and Cloud Environments
 
-## Overview
-This project demonstrates how to build and deploy a **lightweight, portable container runtime platform** that works across:
-- Disconnected, tactical edge devices (e.g., Intel NUC, Raspberry Pi, Klas Voyager)
-- Azure Stack Edge and AWS EC2
+This project delivers a portable, containerized runtime platform capable of deploying containerized applications across:
+- **Tactical edge environments** (e.g., Intel NUC, Raspberry Pi, Klas Voyager)
+- **Disconnected or air-gapped systems**
+- **Cloud environments** (e.g., AWS EC2, Azure Stack Edge)
 
-Built with **K3s**, **Docker**, **Terraform**, and **Ansible**.
+Built using **Docker**, **K3s**, **Helm**, **Terraform**, and **Argo CD**, this project supports GitOps workflows, offline bundles, and CI automation.
 
 ---
 
-## Project Structure
+## 🔧 Project Structure
 ```
-edgeops-runtime/
-├── .github/workflows/         # GitHub Actions for CI
-│   └── docker-ci.yml
-├── .gitignore
-├── LICENSE
-├── edge-bundles/
-├── configs/
-│   ├── install-k3s.sh
-│   ├── bootstrap.sh
-│   └── secrets.env
+edge-runtime-project/
+├── helm-charts/
+│   └── edge-inference/             # Helm chart for the Flask inference app
 ├── docker/
-│   ├── Dockerfile.inference
-│   ├── Dockerfile.logger
-│   └── Dockerfile.dashboard
-├── scripts/
-│   ├── sync-logs.sh
-│   └── gitops-pull.sh
+│   ├── Dockerfile.inference        # Dockerfile for the Flask app
+│   ├── inference.py                # Hello World Flask API
+│   └── requirements.txt            # Flask dependency
 ├── terraform/
 │   ├── main.tf
 │   ├── variables.tf
 │   └── dev.tfvars
-├── ansible/
-│   ├── playbook.yml
-│   └── inventory.ini
-├── k3s-manifests/
-│   ├── inference-deployment.yaml
-│   ├── logger-deployment.yaml
-│   └── dashboard-service.yaml
+├── argocd/
+│   └── edge-inference-app.yaml     # Argo CD GitOps Application manifest
+├── configs/
+│   ├── install-k3s.sh
+│   ├── bootstrap.sh
+│   └── secrets.env
+├── scripts/
+│   ├── sync-logs.sh                # Sync logs to AWS S3
+│   ├── gitops-pull.sh              # Pull latest Helm chart updates
+│   └── test-deployment.sh          # End-to-end simulation
+├── edge-bundles/                  # Contains packaged tarballs for offline deployments
+├── .github/workflows/
+│   └── docker-ci.yml
 └── README.md
 ```
 
 ---
 
-## 🔧 Sample File Contents
+## 🚀 Deployment Overview
 
-### `.gitignore`
-```
-*.tar.gz
-*.log
-*.pem
-.env
-__pycache__/
-.edge-cache/
-.terraform/
-```
-
-### `LICENSE`
-```
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy...
-```
-
-### `.github/workflows/docker-ci.yml`
-```yaml
-name: Docker Build CI
-on: [push]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Build Docker Images
-        run: |
-          docker build -t edge-inference docker/ -f docker/Dockerfile.inference
-```
-
-### `docker/Dockerfile.inference`
-```Dockerfile
-FROM python:3.9-slim
-COPY . /app
-WORKDIR /app
-RUN pip install -r requirements.txt
-CMD ["python", "inference.py"]
-```
-
-### `terraform/main.tf`
-```hcl
-provider "aws" {
-  region = var.aws_region
-}
-
-resource "aws_instance" "edge_runtime" {
-  ami           = var.ami_id
-  instance_type = var.instance_type
-  tags = {
-    Name = "EdgeRuntime"
-  }
-}
-```
-
-### `ansible/playbook.yml`
-```yaml
-- name: Setup Edge Device
-  hosts: edge
-  become: yes
-  tasks:
-    - name: Install K3s
-      shell: curl -sfL https://get.k3s.io | sh -
-    - name: Load images
-      shell: docker load -i /opt/containers.tar
-```
-
-### `configs/install-k3s.sh`
+### Step 1: Build Docker Image
 ```bash
-#!/bin/bash
-curl -sfL https://get.k3s.io | sh -
+cd docker
+docker build -t edge-inference:latest -f Dockerfile.inference .
 ```
 
-### `configs/bootstrap.sh`
+### Step 2: Create Offline Bundle
 ```bash
-#!/bin/bash
-docker load -i ../edge-bundles/containers.tar
-kubectl apply -f ../k3s-manifests/
+docker save -o edge-bundles/containers.tar edge-inference:latest
+cp -r configs edge-bundles/
+tar -czvf edge-bundles/edge-deploy-bundle.tar.gz -C edge-bundles containers.tar configs/
+```
+
+### Step 3: Provision Infrastructure (Cloud)
+```bash
+cd terraform
+terraform init
+terraform apply -var-file="dev.tfvars"
+```
+
+### Step 4: Deploy with Helm (Online or Offline)
+```bash
+# Online
+helm upgrade --install edge-inference helm-charts/edge-inference \
+  --set image.repository=edge-inference \
+  --set image.tag=latest \
+  --set service.type=NodePort
+
+# Offline (K3s air-gapped)
+kubectl load -i edge-bundles/containers.tar
+helm install edge-inference ./helm-charts/edge-inference
+```
+
+### Step 5: GitOps with Argo CD
+```bash
+kubectl apply -f argocd/edge-inference-app.yaml
+```
+ArgoCD will watch your repo and sync Helm chart changes to the cluster.
+
+### Step 6: Test Inference App
+```bash
+kubectl port-forward svc/edge-inference 8080:8080 &
+curl http://localhost:8080
+```
+Expected output:
+```
+Hello from the edge inference container!
 ```
 
 ---
 
-## 📦 Requirements
+## 📦 Scripts Summary
+| Script | Description |
+|--------|-------------|
+| `install-k3s.sh` | Installs K3s lightweight Kubernetes |
+| `bootstrap.sh` | Loads container image and applies Helm chart |
+| `sync-logs.sh` | Pushes logs to AWS S3 bucket |
+| `gitops-pull.sh` | Pulls latest Git repo updates and upgrades Helm |
+| `test-deployment.sh` | Runs full simulated end-to-end deployment locally |
+
+---
+
+## 🔐 Security Considerations
+- TLS certs and tokens can be added to `configs/`
+- Secrets managed via `secrets.env` or AWS SSM/Vault
+
+---
+
+## ✅ Requirements
 - Docker
 - Terraform + AWS CLI
-- Ansible
-- K3s or MicroK8s
+- Helm
+- kubectl
+- K3s (for edge) or any Kubernetes cluster
 
 ---
 
-## 🔄 To-Do
-- Add Vault auto-unseal logic
-- Add Azure Stack Edge deployment example
+## 🧩 TODO
+- Add Prometheus/Grafana observability stack
+- Add Vault auto-unseal
+- Add OTA update check from Git
 
 ---
 
-## License
+## 📄 License
 MIT License
 
 ---
 
-Feel free to fork and adapt this for disconnected or hybrid edge environments.
+Clone this project, adapt to your stack, and deploy anywhere – from air-gapped edge compute to the cloud ☁️
+
+**Repo:** https://github.com/Emmanuel-Ashekun/edge-runtime-project.git
